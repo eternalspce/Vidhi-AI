@@ -62,6 +62,35 @@ app.post(["/api/chat", "/"], async (req, res) => {
     });
   }
 
+  const normalizedHistory = history.map((content) => {
+    if (
+      !content ||
+      !["user", "model"].includes(content.role) ||
+      !Array.isArray(content.parts) ||
+      content.parts.length === 0
+    ) {
+      return null;
+    }
+
+    const parts = content.parts.map((part) => {
+      if (!part || typeof part.text !== "string" || part.text.trim() === "") {
+        return null;
+      }
+
+      return { text: part.text };
+    });
+
+    return parts.some((part) => part === null)
+      ? null
+      : { role: content.role, parts };
+  });
+
+  if (normalizedHistory.some((content) => content === null)) {
+    return res.status(400).json({
+      error: "Conversation history format is invalid.",
+    });
+  }
+
   // Keep the model configurable in Vercel. The default is a currently
   // supported Gemini Flash model; change GEMINI_MODEL without editing code.
   const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
@@ -253,21 +282,11 @@ incident_facts: {
 };
 
    try {
-    const contents = [
-      {
-        role: "user",
-        parts: [
-          {
-            text: systemInstruction,
-          },
-        ],
-      },
-      ...history,
-    ];
+    const contents = normalizedHistory;
 
-    const geminiAbortController = new AbortController();
+    const controller = new AbortController();
     const geminiTimeout = setTimeout(
-      () => geminiAbortController.abort(),
+      () => controller.abort(),
       15_000
     );
     let geminiResponse;
@@ -276,6 +295,11 @@ incident_facts: {
       console.log("Calling Gemini...");
       console.log("Gemini model:", GEMINI_MODEL);
       console.log("Gemini API key exists:", !!GEMINI_API_KEY);
+      console.log("History messages:", history.length);
+      console.log(
+        "History characters:",
+        JSON.stringify(history).length
+      );
 
       geminiResponse = await fetch(apiUrl, {
         method: "POST",
@@ -283,18 +307,27 @@ incident_facts: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          systemInstruction: {
+            parts: [
+              {
+                text: systemInstruction,
+              },
+            ],
+          },
           contents,
           generationConfig: {
             responseMimeType: "application/json",
             responseSchema,
           },
         }),
-        signal: geminiAbortController.signal,
+        signal: controller.signal,
       });
 
       console.log("Gemini responded:", geminiResponse.status);
     } catch (error) {
-      if (geminiAbortController.signal.aborted) {
+      if (error.name === "AbortError") {
+        console.error("Gemini request timed out after 15 seconds");
+
         return res.status(504).json({
           error: "Gemini API request timed out.",
         });

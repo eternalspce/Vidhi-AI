@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static("public"));
 
-app.get("/api/health", (_req, res) => {
+app.get(["/api/health", "/"], (_req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
@@ -43,7 +43,9 @@ function validateIncidentFacts(facts) {
   };
 }
 
-app.post("/api/chat", async (req, res) => {
+// Vercel's api/chat.js function invokes this app with the function-local
+// path `/`, while local Express uses `/api/chat`; support both paths.
+app.post(["/api/chat", "/"], async (req, res) => {
   const { history } = req.body;
 
   const GEMINI_API_KEY = process.env.GEMINI_API_KEY;

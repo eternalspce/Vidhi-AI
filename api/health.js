@@ -1,2 +1,7 @@
 // Explicit Vercel Function entry point for the health check.
-module.exports = require("../server");
+const app = require("../server");
+
+module.exports = (req, res) => {
+  req.url = `/api/health${req.url === "/" ? "" : req.url}`;
+  return app(req, res);
+};

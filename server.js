@@ -91,9 +91,7 @@ app.post(["/api/chat", "/"], async (req, res) => {
     });
   }
 
-  // Keep the model configurable in Vercel. The default is a currently
-  // supported Gemini Flash model; change GEMINI_MODEL without editing code.
-  const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
   const apiUrl =
     `https://generativelanguage.googleapis.com/v1beta/models/` +
     `${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
@@ -284,58 +282,80 @@ incident_facts: {
    try {
     const contents = normalizedHistory;
 
-    const controller = new AbortController();
-    const geminiTimeout = setTimeout(
-      () => controller.abort(),
-      15_000
-    );
+    const maxRetries = 2;
     let geminiResponse;
 
-    try {
-      console.log("Calling Gemini...");
-      console.log("Gemini model:", GEMINI_MODEL);
-      console.log("Gemini API key exists:", !!GEMINI_API_KEY);
-      console.log("History messages:", history.length);
-      console.log(
-        "History characters:",
-        JSON.stringify(history).length
-      );
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+      const controller = new AbortController();
+      const geminiTimeout = setTimeout(() => controller.abort(), 15_000);
 
-      geminiResponse = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          systemInstruction: {
-            parts: [
-              {
-                text: systemInstruction,
-              },
-            ],
+      try {
+        console.log("Calling Gemini...");
+        console.log("Gemini model:", GEMINI_MODEL);
+        console.log("Gemini API key exists:", !!GEMINI_API_KEY);
+        console.log("History messages:", history.length);
+        console.log(
+          "History characters:",
+          JSON.stringify(history).length
+        );
+
+        geminiResponse = await fetch(apiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
-          contents,
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema,
-          },
-        }),
-        signal: controller.signal,
-      });
+          body: JSON.stringify({
+            systemInstruction: {
+              parts: [
+                {
+                  text: systemInstruction,
+                },
+              ],
+            },
+            contents,
+            generationConfig: {
+              responseMimeType: "application/json",
+              responseSchema,
+            },
+          }),
+          signal: controller.signal,
+        });
 
-      console.log("Gemini responded:", geminiResponse.status);
-    } catch (error) {
-      if (error.name === "AbortError") {
-        console.error("Gemini request timed out after 15 seconds");
+        console.log("Gemini responded:", geminiResponse.status);
+      } catch (error) {
+        if (error.name === "AbortError") {
+          console.error("Gemini request timed out after 15 seconds");
 
-        return res.status(504).json({
-          error: "Gemini API request timed out.",
+          return res.status(504).json({
+            error: "Gemini API request timed out.",
+          });
+        }
+
+        throw error;
+      } finally {
+        clearTimeout(geminiTimeout);
+      }
+
+      if (geminiResponse.status !== 503) {
+        break;
+      }
+
+      const errorBody = await geminiResponse.text();
+
+      console.error("Gemini HTTP status:", geminiResponse.status);
+      console.error("Gemini HTTP status text:", geminiResponse.statusText);
+      console.error("Gemini API Error:", errorBody);
+
+      if (attempt === maxRetries) {
+        return res.status(503).json({
+          error: "Gemini is temporarily unavailable. Please try again shortly.",
         });
       }
 
-      throw error;
-    } finally {
-      clearTimeout(geminiTimeout);
+      console.warn(
+        `Gemini returned 503. Retrying attempt ${attempt + 1}/${maxRetries}...`
+      );
+      await new Promise((resolve) => setTimeout(resolve, (attempt + 1) * 1_000));
     }
 
     if (!geminiResponse.ok) {

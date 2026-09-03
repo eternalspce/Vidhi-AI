@@ -60,9 +60,12 @@ app.post("/api/chat", async (req, res) => {
     });
   }
 
+  // Keep the model configurable in Vercel. The default is a currently
+  // supported Gemini Flash model; change GEMINI_MODEL without editing code.
+  const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
   const apiUrl =
     `https://generativelanguage.googleapis.com/v1beta/models/` +
-    `gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`;
+    `${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
   const systemInstruction = `
 You are Vidhi AI, an AI-assisted preliminary FIR information-gathering

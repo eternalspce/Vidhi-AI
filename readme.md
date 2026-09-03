@@ -14,6 +14,8 @@ This project is ready to deploy as an Express application with static files in
 4. In **Settings → Environment Variables**, add `GEMINI_API_KEY` with your
    Gemini API key. Add it to Production and Preview if you want preview
    deployments to call Gemini too.
+   Optionally add `GEMINI_MODEL` (for example, `gemini-2.5-flash`) to select a
+   model without changing the code.
 5. Deploy. The site is served at `/`; the backend is served at `/api/chat`.
 
 `GEMINI_API_KEY` must stay only in Vercel's environment-variable settings and

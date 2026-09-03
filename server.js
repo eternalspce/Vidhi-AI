@@ -265,19 +265,45 @@ incident_facts: {
       ...history,
     ];
 
-    const geminiResponse = await fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        contents,
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema,
+    const geminiAbortController = new AbortController();
+    const geminiTimeout = setTimeout(
+      () => geminiAbortController.abort(),
+      15_000
+    );
+    let geminiResponse;
+
+    try {
+      console.log("Calling Gemini...");
+      console.log("Gemini model:", GEMINI_MODEL);
+      console.log("Gemini API key exists:", !!GEMINI_API_KEY);
+
+      geminiResponse = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      }),
-    });
+        body: JSON.stringify({
+          contents,
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema,
+          },
+        }),
+        signal: geminiAbortController.signal,
+      });
+
+      console.log("Gemini responded:", geminiResponse.status);
+    } catch (error) {
+      if (geminiAbortController.signal.aborted) {
+        return res.status(504).json({
+          error: "Gemini API request timed out.",
+        });
+      }
+
+      throw error;
+    } finally {
+      clearTimeout(geminiTimeout);
+    }
 
     if (!geminiResponse.ok) {
       const errorBody = await geminiResponse.text();

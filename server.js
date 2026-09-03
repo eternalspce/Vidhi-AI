@@ -341,10 +341,13 @@ incident_facts: {
     if (!geminiResponse.ok) {
       const errorBody = await geminiResponse.text();
 
+      console.error("Gemini HTTP status:", geminiResponse.status);
+      console.error("Gemini HTTP status text:", geminiResponse.statusText);
       console.error("Gemini API Error:", errorBody);
 
       return res.status(geminiResponse.status).json({
         error: "Gemini API request failed.",
+        geminiStatus: geminiResponse.status,
         details: errorBody,
       });
     }

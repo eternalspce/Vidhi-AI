@@ -7,7 +7,11 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
-app.use(express.static("."));
+app.use(express.static("public"));
+
+app.get("/api/health", (_req, res) => {
+  res.status(200).json({ status: "ok" });
+});
 
 function validateIncidentFacts(facts) {
   const requiredFields = [
@@ -323,6 +327,12 @@ res.json(structuredResponse);
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
-});
+// Vercel imports this Express app as a serverless function. Locally, this
+// file can still be started directly with `npm start`.
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
